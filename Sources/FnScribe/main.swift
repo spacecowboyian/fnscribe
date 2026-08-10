@@ -9,7 +9,7 @@ let doubleTapWindow: TimeInterval = 0.42
 let placeholderText = ProcessInfo.processInfo.environment["FNSCRIBE_PLACEHOLDER"] ?? "transcribing..."
 let historyLimit = Int(ProcessInfo.processInfo.environment["FNSCRIBE_HISTORY_LIMIT"] ?? "50") ?? 50
 let soundEnabled = (ProcessInfo.processInfo.environment["FNSCRIBE_SOUND"] ?? "1") != "0"
-let startSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_START_SOUND"] ?? "Tink"
+let startSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_START_SOUND"] ?? "Ping"
 let stopSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_STOP_SOUND"] ?? "Pop"
 let completeSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_COMPLETE_SOUND"] ?? "Glass"
 let triggerKey = TriggerKey.fromEnvironment()
@@ -18,6 +18,7 @@ let projectRoot = URL(
     isDirectory: true
 )
 let logFile = projectRoot.appendingPathComponent("work/fn-scribe.log")
+var activeSounds: [NSSound] = []
 
 struct TranscriptEntry: Codable {
     let id: String
@@ -179,6 +180,10 @@ final class Store {
             main { max-width: 900px; margin: 0 auto; padding: 24px 16px 56px; }
             h1 { font-size: 28px; margin: 0 0 6px; }
             .sub { margin: 0 0 14px; color: color-mix(in srgb, CanvasText 68%, transparent); }
+            .live { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 14px; font-size: 13px; color: color-mix(in srgb, CanvasText 68%, transparent); }
+            .live::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: #9a9a9a; }
+            .live.connected::before { background: #24a148; }
+            .live.static::before { background: #d14b31; }
             .status { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px 14px; margin: 0 0 20px; background: color-mix(in srgb, Canvas 88%, CanvasText 12%); }
             .status strong { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
             .status p { margin: 3px 0 0; }
@@ -202,6 +207,7 @@ final class Store {
           <main>
             <h1>FnScribe History</h1>
             <p class="sub">Newest transcripts first. This page refreshes automatically.</p>
+            <p id="live-indicator" class="live">Checking live updates...</p>
             <section id="status" class="status \(escape(status.state))">
               <span class="pulse" aria-hidden="true"></span>
               <div>
@@ -218,6 +224,7 @@ final class Store {
             const stateEl = document.getElementById('status-state');
             const messageEl = document.getElementById('status-message');
             const updatedEl = document.getElementById('status-updated');
+            const liveEl = document.getElementById('live-indicator');
 
             function esc(text) {
               return String(text ?? '').replace(/[&<>"']/g, ch => ({
@@ -261,6 +268,11 @@ final class Store {
             }
 
             async function refreshLiveData() {
+              if (location.protocol === 'file:') {
+                liveEl.className = 'live static';
+                liveEl.textContent = 'Static file opened. Use http://127.0.0.1:8765/fn-scribe-history.html for live updates.';
+                return;
+              }
               try {
                 const stamp = Date.now();
                 const [statusResponse, historyResponse] = await Promise.all([
@@ -270,8 +282,11 @@ final class Store {
                 if (!statusResponse.ok || !historyResponse.ok) return;
                 renderStatus(await statusResponse.json());
                 renderEntries(await historyResponse.json());
+                liveEl.className = 'live connected';
+                liveEl.textContent = 'Live updates connected.';
               } catch {
-                // file:// fallback keeps the server-rendered page visible.
+                liveEl.className = 'live static';
+                liveEl.textContent = 'Live updates unavailable. Open this page through the FnScribe local server.';
               }
             }
 
@@ -324,8 +339,8 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
             recorder?.prepareToRecord()
             recorder?.record()
             startedAt = Date()
-            playCue(startSoundName)
             store.setStatus("recording", "Recording \(mode). Release \(triggerKey.label) to stop.")
+            playCue(startSoundName)
             log("Recording \(mode)...")
         } catch {
             store.setStatus("failed", "Could not start recording.")
@@ -649,7 +664,17 @@ func sendModifiedKey(keyCode: CGKeyCode, flags: CGEventFlags, source: CGEventSou
 
 func playCue(_ name: String) {
     guard soundEnabled else { return }
-    NSSound(named: NSSound.Name(name))?.play()
+    DispatchQueue.main.async {
+        guard let sound = NSSound(named: NSSound.Name(name)) else {
+            log("Sound cue not found: \(name)")
+            return
+        }
+        activeSounds.append(sound)
+        sound.play()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            activeSounds.removeAll { $0 === sound }
+        }
+    }
 }
 
 func escape(_ text: String) -> String {
