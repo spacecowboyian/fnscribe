@@ -24,7 +24,10 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     )
     private var historyURL: URL { projectRoot.appendingPathComponent("public/history.json") }
     private var statusURL: URL { projectRoot.appendingPathComponent("public/status.json") }
-    private var historyPageURL: URL { projectRoot.appendingPathComponent("public/fn-scribe-history.html") }
+    private var historyPageURL: URL {
+        let port = ProcessInfo.processInfo.environment["FNSCRIBE_UI_PORT"] ?? "8765"
+        return URL(string: "http://127.0.0.1:\(port)/fn-scribe-history.html")!
+    }
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {

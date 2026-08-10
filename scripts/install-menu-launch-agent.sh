@@ -2,11 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/public/FnScribeMenu.app"
+APP_DIR="${FNSCRIBE_MENU_APP_DIR:-$HOME/Applications}"
+APP="$APP_DIR/FnScribeMenu.app"
 PLIST="$HOME/Library/LaunchAgents/local.fnscribe.menu.plist"
 
-mkdir -p "$HOME/Library/LaunchAgents" "$ROOT/work"
+mkdir -p "$HOME/Library/LaunchAgents" "$ROOT/work" "$APP_DIR"
 "$ROOT/scripts/build.sh"
+ditto "$ROOT/public/FnScribeMenu.app" "$APP"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -24,6 +26,8 @@ cat > "$PLIST" <<PLIST
   <dict>
     <key>FNSCRIBE_PROJECT_ROOT</key>
     <string>$ROOT</string>
+    <key>FNSCRIBE_UI_PORT</key>
+    <string>${FNSCRIBE_UI_PORT:-8765}</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
