@@ -32,10 +32,14 @@ final class MenuApp: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        statusItem.button?.title = "Fn"
-        statusItem.button?.toolTip = "FnScribe recent transcripts"
+        if let button = statusItem.button {
+            button.title = "Fn"
+            button.toolTip = "FnScribe recent transcripts"
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 5
+        }
         rebuildMenu()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.rebuildMenu()
         }
     }
@@ -44,6 +48,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let status = loadStatus()
         let entries = loadEntries(limit: 5)
+        updateStatusButton(status)
 
         let statusItem = NSMenuItem(title: statusTitle(status), action: nil, keyEquivalent: "")
         statusItem.isEnabled = false
@@ -99,6 +104,28 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         menu.addItem(quit)
 
         self.statusItem.menu = menu
+    }
+
+    private func updateStatusButton(_ status: AppStatus?) {
+        guard let button = statusItem.button else { return }
+        let state = status?.state ?? "idle"
+        button.title = "Fn"
+        button.attributedTitle = NSAttributedString(
+            string: "Fn",
+            attributes: [
+                .font: NSFont.menuBarFont(ofSize: 0),
+                .foregroundColor: NSColor.labelColor
+            ]
+        )
+
+        switch state {
+        case "recording":
+            button.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.85).cgColor
+        case "transcribing":
+            button.layer?.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.9).cgColor
+        default:
+            button.layer?.backgroundColor = NSColor.clear.cgColor
+        }
     }
 
     private func loadEntries(limit: Int) -> [TranscriptEntry] {
