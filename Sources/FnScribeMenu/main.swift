@@ -28,6 +28,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let port = ProcessInfo.processInfo.environment["FNSCRIBE_UI_PORT"] ?? "8765"
         return URL(string: "http://127.0.0.1:\(port)/fn-scribe-history.html")!
     }
+    private let statusDateFormatter = ISO8601DateFormatter()
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -44,7 +45,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         let menu = NSMenu()
-        let status = loadStatus()
+        let status = effectiveStatus(loadStatus())
         let entries = loadEntries(limit: 5)
         updateStatusButton(status)
 
@@ -168,6 +169,16 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     private func loadStatus() -> AppStatus? {
         guard let data = try? Data(contentsOf: statusURL) else { return nil }
         return try? JSONDecoder().decode(AppStatus.self, from: data)
+    }
+
+    private func effectiveStatus(_ status: AppStatus?) -> AppStatus? {
+        guard let status else { return nil }
+        guard status.state == "recording" || status.state == "transcribing" else { return status }
+        guard let updatedAt = statusDateFormatter.date(from: status.updatedAt) else { return status }
+        if Date().timeIntervalSince(updatedAt) > 600 {
+            return AppStatus(state: "idle", message: "Ready", updatedAt: status.updatedAt)
+        }
+        return status
     }
 
     private func statusTitle(_ status: AppStatus?) -> String {

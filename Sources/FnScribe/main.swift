@@ -740,6 +740,7 @@ func installKeyboardTap(watcher: KeyWatcher) {
 }
 
 let store = try Store()
+store.setStatus("idle", "Ready")
 try store.renderHTML(store.load(), status: store.loadStatus())
 
 if CommandLine.arguments.contains("--smoke-test") {
