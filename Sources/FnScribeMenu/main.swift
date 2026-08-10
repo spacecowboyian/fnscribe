@@ -33,10 +33,8 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         if let button = statusItem.button {
-            button.title = "Fn"
             button.toolTip = "FnScribe recent transcripts"
-            button.wantsLayer = true
-            button.layer?.cornerRadius = 5
+            button.imagePosition = .imageOnly
         }
         rebuildMenu()
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -109,23 +107,54 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     private func updateStatusButton(_ status: AppStatus?) {
         guard let button = statusItem.button else { return }
         let state = status?.state ?? "idle"
-        button.title = "Fn"
-        button.attributedTitle = NSAttributedString(
-            string: "Fn",
-            attributes: [
-                .font: NSFont.menuBarFont(ofSize: 0),
-                .foregroundColor: NSColor.labelColor
-            ]
-        )
+        button.title = ""
+        button.image = badgeImage(for: state)
+        button.image?.isTemplate = false
+    }
+
+    private func badgeImage(for state: String) -> NSImage {
+        let size = NSSize(width: 31, height: 18)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        let rect = NSRect(origin: .zero, size: size)
+        let background: NSColor?
+        let foreground: NSColor
 
         switch state {
         case "recording":
-            button.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.85).cgColor
+            background = NSColor.systemGreen
+            foreground = .white
         case "transcribing":
-            button.layer?.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.9).cgColor
+            background = NSColor.systemYellow
+            foreground = .black
         default:
-            button.layer?.backgroundColor = NSColor.clear.cgColor
+            background = nil
+            foreground = NSColor.labelColor
         }
+
+        if let background {
+            background.setFill()
+            NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5).fill()
+        }
+
+        let text = "Fn" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: foreground
+        ]
+        let textSize = text.size(withAttributes: attributes)
+        text.draw(
+            at: NSPoint(
+                x: (size.width - textSize.width) / 2,
+                y: (size.height - textSize.height) / 2
+            ),
+            withAttributes: attributes
+        )
+
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
     }
 
     private func loadEntries(limit: Int) -> [TranscriptEntry] {
