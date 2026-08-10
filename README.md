@@ -123,9 +123,16 @@ FNSCRIBE_STOP_SOUND="Pop"
 FNSCRIBE_COMPLETE_SOUND="Glass"
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-mini-transcribe"
 OPENAI_CLEANUP_MODEL="gpt-5-mini"
+FNSCRIBE_CLEANUP_MODE="auto"
 ```
 
-Set `OPENAI_CLEANUP_MODEL=""` to skip cleanup and make completion faster.
+`FNSCRIBE_CLEANUP_MODE` controls when FnScribe uses the cleanup model:
+
+- `auto`: skip cleanup for short, clean-looking transcripts and clean up messier dictation.
+- `always`: always run the cleanup model.
+- `never`: never run the cleanup model.
+
+Set `OPENAI_CLEANUP_MODEL=""` to disable cleanup completely and make completion faster.
 
 Set `FNSCRIBE_SOUND="0"` to disable sound cues.
 

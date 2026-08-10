@@ -12,6 +12,7 @@ let soundEnabled = (ProcessInfo.processInfo.environment["FNSCRIBE_SOUND"] ?? "1"
 let startSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_START_SOUND"] ?? "Ping"
 let stopSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_STOP_SOUND"] ?? "Pop"
 let completeSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_COMPLETE_SOUND"] ?? "Glass"
+let cleanupMode = ProcessInfo.processInfo.environment["FNSCRIBE_CLEANUP_MODE"] ?? "auto"
 let triggerKey = TriggerKey.fromEnvironment()
 let projectRoot = URL(
     fileURLWithPath: ProcessInfo.processInfo.environment["FNSCRIBE_PROJECT_ROOT"] ?? FileManager.default.currentDirectoryPath,
@@ -366,7 +367,8 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
     private func finish(url: URL, duration: Double, pasteToken: PasteToken?) async {
         do {
             let raw = try await transcriber.transcribe(url)
-            let cleaned = try await transcriber.clean(raw)
+            store.setStatus("transcribing", "Assessing transcript cleanup.")
+            let cleaned = try await transcriber.cleanIfNeeded(raw)
             pasteController.replacePlaceholder(with: cleaned, token: pasteToken)
             playCue(completeSoundName)
             let entry = TranscriptEntry(
@@ -443,6 +445,57 @@ final class Transcriber {
         return decoded.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    func cleanIfNeeded(_ text: String) async throws -> String {
+        guard shouldClean(text) else {
+            log("Cleanup skipped.")
+            return text
+        }
+        log("Cleanup requested.")
+        return try await clean(text)
+    }
+
+    private func shouldClean(_ text: String) -> Bool {
+        guard !cleanupModel.isEmpty else { return false }
+        switch cleanupMode.lowercased() {
+        case "always":
+            return true
+        case "never", "off", "false", "0":
+            return false
+        default:
+            return looksLikeItNeedsCleanup(text)
+        }
+    }
+
+    private func looksLikeItNeedsCleanup(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        let words = trimmed
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+        if words.count <= 6 { return false }
+        if words.count >= 45 { return true }
+        if words.count >= 18 && !".!?".contains(trimmed.last ?? ".") { return true }
+
+        let lower = " \(trimmed.lowercased()) "
+        let cleanupSignals = [
+            " um ", " uh ", " er ", " ah ",
+            " you know ", " i mean ", " no wait ", " scratch that ",
+            " actually ", " sorry ", " let me rephrase "
+        ]
+        if cleanupSignals.contains(where: { lower.contains($0) }) { return true }
+
+        for index in words.indices.dropFirst() {
+            if words[index] == words[words.index(before: index)] { return true }
+        }
+
+        let sentenceBreaks = trimmed.filter { ".!?".contains($0) }.count
+        if words.count >= 28 && sentenceBreaks == 0 { return true }
+
+        return false
+    }
+
     func clean(_ text: String) async throws -> String {
         guard !cleanupModel.isEmpty else { return text }
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
@@ -452,7 +505,7 @@ final class Transcriber {
         let body = ChatRequest(
             model: cleanupModel,
             messages: [
-                ChatMessage(role: "system", content: "Clean up voice dictation. Preserve the user's meaning and wording. Fix punctuation, casing, paragraph breaks, and obvious transcription mistakes. Remove filler only when it is clearly not intentional. Return only the cleaned text."),
+                ChatMessage(role: "system", content: "Clean up voice dictation. Preserve the user's meaning and wording. Fix punctuation, casing, paragraph breaks, and obvious transcription mistakes. Remove filler only when it is clearly not intentional. If the dictation is slightly out of order, reorganize it into the most natural sequence without adding new ideas. Return only the cleaned text."),
                 ChatMessage(role: "user", content: text)
             ]
         )
