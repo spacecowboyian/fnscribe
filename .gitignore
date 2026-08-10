@@ -1,0 +1,9 @@
+.DS_Store
+.env
+.build/
+work/
+outputs/
+public/
+*.xcuserdata/
+*.xcuserstate
+DerivedData/
