@@ -120,13 +120,14 @@ FNSCRIBE_HISTORY_LIMIT="50"
 FNSCRIBE_SOUND="1"
 FNSCRIBE_START_SOUND="Tink"
 FNSCRIBE_STOP_SOUND="Pop"
+FNSCRIBE_COMPLETE_SOUND="Glass"
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-mini-transcribe"
 OPENAI_CLEANUP_MODEL="gpt-5-mini"
 ```
 
 Set `OPENAI_CLEANUP_MODEL=""` to skip cleanup and make completion faster.
 
-Set `FNSCRIBE_SOUND="0"` to disable start/stop sound cues.
+Set `FNSCRIBE_SOUND="0"` to disable sound cues.
 
 Other built-in macOS sound names include `Ping`, `Glass`, `Bottle`, `Hero`, `Submarine`, and `Morse`.
 

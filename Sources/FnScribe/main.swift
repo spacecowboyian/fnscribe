@@ -11,6 +11,7 @@ let historyLimit = Int(ProcessInfo.processInfo.environment["FNSCRIBE_HISTORY_LIM
 let soundEnabled = (ProcessInfo.processInfo.environment["FNSCRIBE_SOUND"] ?? "1") != "0"
 let startSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_START_SOUND"] ?? "Tink"
 let stopSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_STOP_SOUND"] ?? "Pop"
+let completeSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_COMPLETE_SOUND"] ?? "Glass"
 let triggerKey = TriggerKey.fromEnvironment()
 let projectRoot = URL(
     fileURLWithPath: ProcessInfo.processInfo.environment["FNSCRIBE_PROJECT_ROOT"] ?? FileManager.default.currentDirectoryPath,
@@ -352,6 +353,7 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
             let raw = try await transcriber.transcribe(url)
             let cleaned = try await transcriber.clean(raw)
             pasteController.replacePlaceholder(with: cleaned, token: pasteToken)
+            playCue(completeSoundName)
             let entry = TranscriptEntry(
                 id: UUID().uuidString,
                 createdAt: ISO8601DateFormatter.display.string(from: Date()),
