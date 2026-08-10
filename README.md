@@ -69,6 +69,25 @@ scripts/uninstall-launch-agents.sh
 
 After installing or running the menu app, look for **Fn** in the macOS menu bar. It shows the latest five transcripts and lets you copy cleaned or raw text.
 
+## Cost Compared With Wispr Flow
+
+Wispr Flow Pro is listed at about `$15/user/month` monthly, or about `$12/user/month` when billed annually. FnScribe uses your own OpenAI API key instead of a subscription.
+
+With the default `gpt-4o-mini-transcribe` model, OpenAI lists transcription at about `$0.003/minute` of audio. At that rate:
+
+- `$15` buys roughly `5,000` minutes, or about `83` hours, of transcription.
+- `$12` buys roughly `4,000` minutes, or about `67` hours, of transcription.
+
+FnScribe also optionally sends the transcript through a cleanup model, so your real cost will be a little higher when cleanup is enabled. For short dictation, that cleanup cost is usually small compared with the transcription cost.
+
+Try it for a week or two and compare your actual API usage against what you would pay for Wispr Flow. If you dictate constantly, a polished subscription app may still be worth it. If you mostly do short bursts of dictation, FnScribe may save you money.
+
+Current pricing can change, so check:
+
+- OpenAI transcription pricing: <https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe>
+- OpenAI API pricing: <https://openai.com/api/pricing/>
+- Wispr Flow pricing: <https://wisprflow.ai/business>
+
 ## Local History UI
 
 The recorder writes a local UI into `public/` and serves it at:
@@ -110,7 +129,3 @@ FnScribe stores local working data under `work/` by default:
 It mirrors browser-readable files into `public/`.
 
 Both `work/` and `public/` are ignored by git.
-
-## Notes
-
-The experimental WidgetKit project under `Native/` is included, but the practical supported UI is the menu bar app. macOS Notification Center widgets require native signed WidgetKit extensions and can be finicky for local/ad-hoc builds.

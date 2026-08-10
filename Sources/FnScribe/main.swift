@@ -146,16 +146,6 @@ final class Store {
     }
 
     func renderHTML(_ entries: [TranscriptEntry], status: AppStatus) throws {
-        let recentRows = entries.prefix(5).map { entry in
-            """
-            <article class="recent-item">
-              <time>\(escape(entry.createdAt))</time>
-              <p>\(escape(entry.cleanedText))</p>
-              <button onclick="copyRecent(this)" data-copy="\(escapeAttribute(entry.cleanedText))">Copy</button>
-            </article>
-            """
-        }.joined(separator: "\n")
-
         let rows = entries.map { entry in
             """
             <article class="entry">
@@ -185,16 +175,9 @@ final class Store {
           <style>
             :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
             body { margin: 0; background: Canvas; color: CanvasText; }
-            main { max-width: 1220px; margin: 0 auto; padding: 24px 16px 56px; }
+            main { max-width: 900px; margin: 0 auto; padding: 24px 16px 56px; }
             h1 { font-size: 28px; margin: 0 0 6px; }
             .sub { margin: 0 0 14px; color: color-mix(in srgb, CanvasText 68%, transparent); }
-            .layout { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
-            .sidebar { position: sticky; top: 16px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; background: color-mix(in srgb, Canvas 94%, CanvasText 6%); }
-            .sidebar h2 { font-size: 15px; margin: 0 0 10px; }
-            .recent-item { border-top: 1px solid color-mix(in srgb, CanvasText 14%, transparent); padding: 10px 0; }
-            .recent-item:first-of-type { border-top: 0; padding-top: 0; }
-            .recent-item time { display: block; font-size: 11px; color: color-mix(in srgb, CanvasText 58%, transparent); margin-bottom: 5px; }
-            .recent-item p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; font-size: 13px; line-height: 1.35; margin: 0 0 8px; }
             .status { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px 14px; margin: 0 0 20px; background: color-mix(in srgb, Canvas 88%, CanvasText 12%); }
             .status strong { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
             .status p { margin: 3px 0 0; }
@@ -212,10 +195,6 @@ final class Store {
             button { border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 6px; padding: 7px 11px; background: ButtonFace; color: ButtonText; cursor: pointer; }
             details { font-size: 13px; }
             pre { white-space: pre-wrap; max-height: 260px; overflow: auto; }
-            @media (max-width: 760px) {
-              .layout { grid-template-columns: 1fr; }
-              .sidebar { position: static; }
-            }
           </style>
         </head>
         <body>
@@ -230,17 +209,10 @@ final class Store {
               </div>
               <time id="status-updated">\(escape(status.updatedAt))</time>
             </section>
-            <div class="layout">
-              <aside class="sidebar">
-                <h2>Recent</h2>
-                <section id="recent">\(recentRows.isEmpty ? "<p>No transcripts yet.</p>" : recentRows)</section>
-              </aside>
-              <section id="entries">\(rows.isEmpty ? "<p>No transcripts yet.</p>" : rows)</section>
-            </div>
+            <section id="entries">\(rows.isEmpty ? "<p>No transcripts yet.</p>" : rows)</section>
           </main>
           <script>
             const entriesEl = document.getElementById('entries');
-            const recentEl = document.getElementById('recent');
             const statusEl = document.getElementById('status');
             const stateEl = document.getElementById('status-state');
             const messageEl = document.getElementById('status-message');
@@ -267,16 +239,8 @@ final class Store {
             function renderEntries(entries) {
               if (!Array.isArray(entries) || entries.length === 0) {
                 entriesEl.innerHTML = '<p>No transcripts yet.</p>';
-                recentEl.innerHTML = '<p>No transcripts yet.</p>';
                 return;
               }
-              recentEl.innerHTML = entries.slice(0, 5).map(entry => `
-                <article class="recent-item">
-                  <time>${esc(entry.createdAt)}</time>
-                  <p>${esc(entry.cleanedText)}</p>
-                  <button onclick="copyRecent(this)" data-copy="${esc(entry.cleanedText)}">Copy</button>
-                </article>
-              `).join('');
               entriesEl.innerHTML = entries.map(entry => `
                 <article class="entry">
                   <header>
@@ -313,13 +277,6 @@ final class Store {
             async function copyText(button) {
               const text = button.closest('.entry').querySelector('textarea').value;
               await navigator.clipboard.writeText(text);
-              const old = button.textContent;
-              button.textContent = 'Copied';
-              setTimeout(() => button.textContent = old, 900);
-            }
-
-            async function copyRecent(button) {
-              await navigator.clipboard.writeText(button.dataset.copy || '');
               const old = button.textContent;
               button.textContent = 'Copied';
               setTimeout(() => button.textContent = old, 900);
