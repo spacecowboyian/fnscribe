@@ -1,6 +1,6 @@
 # FnScribe
 
-FnScribe is a small macOS dictation helper:
+FnScribe is a small macOS dictation helper and Wispr Flow alternative:
 
 - Hold `Fn` to record; release to stop.
 - Double-tap `Fn` to start/stop a longer recording.
