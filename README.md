@@ -80,6 +80,18 @@ With the default `gpt-4o-mini-transcribe` model, OpenAI lists transcription at a
 
 FnScribe also optionally sends the transcript through a cleanup model, so your real cost will be a little higher when cleanup is enabled. For short dictation, that cleanup cost is usually small compared with the transcription cost.
 
+One real early-use sample from FnScribe's local history:
+
+- `18` transcriptions
+- `4.52` minutes of recorded audio
+- about `3,854` raw transcript characters
+- about `3,576` cleaned transcript characters
+- transcription estimate: about `$0.0136`
+- cleanup estimate with `gpt-5-mini`: about `$0.0023`
+- total estimate: about `$0.0159`, or `1.6 cents`
+
+That cleanup estimate is approximate because local history stores the transcript text, not the exact billable token count from the API. It includes a rough allowance for the cleanup instruction sent with each request. In this sample, a `$10` API credit would cover roughly `2,800-3,000` minutes of similar short-form dictation with cleanup enabled.
+
 Try it for a week or two and compare your actual API usage against what you would pay for Wispr Flow. If you dictate constantly, a polished subscription app may still be worth it. If you mostly do short bursts of dictation, FnScribe may save you money.
 
 Current pricing can change, so check:
