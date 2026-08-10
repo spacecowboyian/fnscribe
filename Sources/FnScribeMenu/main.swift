@@ -124,13 +124,13 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         switch state {
         case "recording":
             background = NSColor.systemGreen
-            foreground = .white
+            foreground = .black
         case "transcribing":
             background = NSColor.systemYellow
             foreground = .black
         default:
             background = nil
-            foreground = NSColor.labelColor
+            foreground = .white
         }
 
         if let background {
