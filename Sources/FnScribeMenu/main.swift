@@ -122,6 +122,9 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let background: NSColor?
         let foreground: NSColor
 
+        // Idle draws as a template image so macOS tints it for the current menu
+        // bar appearance; a hardcoded color is invisible in one of the two modes.
+        let isIdle = state != "recording" && state != "transcribing"
         switch state {
         case "recording":
             background = NSColor.systemGreen
@@ -131,7 +134,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
             foreground = .black
         default:
             background = nil
-            foreground = .white
+            foreground = .black
         }
 
         if let background {
@@ -154,7 +157,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         )
 
         image.unlockFocus()
-        image.isTemplate = false
+        image.isTemplate = isIdle
         return image
     }
 

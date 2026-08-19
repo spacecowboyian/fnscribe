@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import AVFoundation
 import CoreGraphics
 import Foundation
@@ -360,8 +361,22 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
         log("Recording stopped. Transcribing...")
         let pasteToken = pasteController.pastePlaceholder()
         Task {
+            // AVAudioRecorder finalizes the .m4a container asynchronously. Uploading
+            // before the moov atom lands yields a 200 with an empty transcript, so
+            // hold the recorder alive until the file actually parses.
+            await Self.waitForPlayableFile(at: url)
+            withExtendedLifetime(recorder) {}
             await finish(url: url, duration: duration, pasteToken: pasteToken)
         }
+    }
+
+    private static func waitForPlayableFile(at url: URL, timeout: TimeInterval = 5) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let file = try? AVAudioFile(forReading: url), file.length > 0 { return }
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
+        log("Timed out waiting for the recording to finalize; uploading anyway.")
     }
 
     private func finish(url: URL, duration: Double, pasteToken: PasteToken?) async {
@@ -787,6 +802,7 @@ func installKeyboardTap(watcher: KeyWatcher) {
     CGEvent.tapEnable(tap: tap, enable: true)
 
     log("FnScribe is running.")
+    log("Permissions: accessibility(post events)=\(AXIsProcessTrusted()) inputMonitoring(listen)=\(CGPreflightListenEventAccess())")
     log("Hold \(triggerKey.label) to record. Double-tap \(triggerKey.label) to start/stop long recording.")
     log("History UI: \(store.htmlFile.path)")
     CFRunLoopRun()

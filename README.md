@@ -16,8 +16,11 @@ FnScribe is a small macOS dictation helper and Wispr Flow alternative:
 - macOS
 - Xcode command line tools / Xcode
 - An OpenAI API key with API credits
-- Microphone permission
-- Accessibility permission for the terminal/app that runs FnScribe
+- A code signing certificate (see [Signing](#signing)) so permissions survive rebuilds
+- Three macOS permissions for the recorder binary (see [Permissions](#permissions)):
+  - Microphone
+  - Input Monitoring, to detect the `Fn` key
+  - Accessibility, to paste the transcript
 
 ChatGPT subscriptions do not include API credits by default.
 
@@ -32,6 +35,10 @@ Edit `.env` and add your API key:
 ```sh
 OPENAI_API_KEY="your-api-key"
 ```
+
+Create your signing certificate before building, so the build can use it — see
+[Signing](#signing). Skipping this step means re-granting macOS permissions
+after every single rebuild.
 
 Build:
 
@@ -64,6 +71,140 @@ Remove both launch agents:
 ```sh
 scripts/uninstall-launch-agents.sh
 ```
+
+The menu agent records the repository path it was installed from. If you move
+the repository, re-run both install scripts, or the menu app will keep reading
+status from the old location and never update.
+
+## Signing
+
+Do this before granting permissions, or you will grant them twice.
+
+macOS ties permission grants to a binary's code signature. The default build is
+ad-hoc signed, which means the signature is keyed by a hash of the binary
+itself: every rebuild produces a new hash, macOS treats the result as different
+software, and **every permission you granted is silently revoked**. Nothing
+fails loudly. The recorder starts normally, the key tap is created
+successfully, and no events ever arrive.
+
+Signing with your own certificate fixes this, because the resulting requirement
+names the certificate rather than the binary's hash, and so keeps matching
+after a rebuild.
+
+Create the certificate once, in Keychain Access:
+
+1. **Keychain Access → Certificate Assistant → Create a Certificate…**
+2. Name: `FnScribe Dev`
+3. Identity Type: **Self Signed Root**
+4. Certificate Type: **Code Signing**
+5. Create.
+
+`scripts/build.sh` picks it up automatically by name. Override with
+`FNSCRIBE_SIGN_IDENTITY` if you named it something else. If no matching
+certificate exists, the build warns and falls back to ad-hoc signing.
+
+To confirm a build is signed the durable way:
+
+```sh
+codesign -d -r- work/bin/fn-scribe
+```
+
+Look for a requirement naming `certificate leaf`, with no `cdhash`:
+
+```text
+designated => identifier "local.fnscribe.recorder" and certificate leaf = H"..."
+```
+
+`security find-identity -v -p codesigning` may report `0 valid identities` for a
+self-signed root, because it is not marked as trusted. That is expected and does
+not prevent signing.
+
+## Permissions
+
+FnScribe needs two separate permissions that are easy to confuse. Granting one
+does not grant the other, and each failure looks different:
+
+| Permission | Used for | Symptom when missing |
+| --- | --- | --- |
+| Input Monitoring | Detecting the `Fn` key | Pressing `Fn` does nothing at all |
+| Accessibility | Pasting via synthetic `Cmd+V` | Recording and transcription work, clipboard is correct, but nothing is pasted and no placeholder appears |
+
+Grant both to the recorder **binary**, not to your terminal:
+
+```text
+work/bin/fn-scribe
+```
+
+When FnScribe runs as a launch agent, macOS cannot show a permission prompt, so
+nothing will ever ask you. Add the binary by hand:
+
+1. Open **System Settings → Privacy & Security → Input Monitoring**.
+2. Unlock the pane, or the toggle will not stick.
+3. Drag `work/bin/fn-scribe` in from Finder, then switch the toggle on.
+4. Repeat under **Privacy & Security → Accessibility**.
+5. Restart the recorder:
+
+```sh
+launchctl kickstart -k "gui/$(id -u)/local.fnscribe.recorder"
+```
+
+If an entry for `fn-scribe` is already listed, remove it with `−` before adding
+it again. A stale entry from an earlier build takes precedence over a new one.
+
+The recorder logs what it actually has at startup, so you never have to infer
+permissions from symptoms:
+
+```sh
+grep "Permissions:" work/fn-scribe.log | tail -1
+```
+
+```text
+Permissions: accessibility(post events)=true inputMonitoring(listen)=true
+```
+
+Microphone is different: it prompts normally the first time, and the log
+records the result as `Microphone access granted.`
+
+## Troubleshooting
+
+Everything the recorder does is logged:
+
+```sh
+tail -f work/fn-scribe.log
+```
+
+**Pressing `Fn` does nothing.** Check the recorder is actually running, since
+the menu bar app runs as a separate agent and its presence proves nothing:
+
+```sh
+launchctl list | grep fnscribe
+```
+
+If it is running, check the `Permissions:` line for
+`inputMonitoring(listen)=false`. If it is `true` and the key still does nothing,
+confirm the binary is signed with your certificate, not ad-hoc.
+
+**Nothing pastes, but the clipboard has the right text.** Accessibility is
+missing. The transcript is complete, so paste the text manually with `Cmd+V`
+until the permission is granted.
+
+**Permissions worked, then stopped after a rebuild.** The build fell back to
+ad-hoc signing. Check for the warning in the build output, confirm the
+certificate exists, then re-grant both permissions once.
+
+**The menu bar item is missing or stale.** Confirm the menu agent points at the
+current repository path:
+
+```sh
+grep -A1 FNSCRIBE_PROJECT_ROOT ~/Library/LaunchAgents/local.fnscribe.menu.plist
+```
+
+Re-run `scripts/install-menu-launch-agent.sh` if it points somewhere else.
+
+**No sound cues.** Confirm `FNSCRIBE_SOUND` is not `0`, then check the sound
+cues are audible outside FnScribe: the output device, the alert volume in Sound
+settings (separate from the main volume), and Focus modes all silence them
+independently of this app.
 
 ## Menu Bar App
 
