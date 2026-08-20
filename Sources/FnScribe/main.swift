@@ -14,6 +14,8 @@ let startSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_START_SOUND"]
 let stopSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_STOP_SOUND"] ?? "Pop"
 let completeSoundName = ProcessInfo.processInfo.environment["FNSCRIBE_COMPLETE_SOUND"] ?? "Glass"
 let cleanupMode = ProcessInfo.processInfo.environment["FNSCRIBE_CLEANUP_MODE"] ?? "auto"
+let restoreClipboard = (ProcessInfo.processInfo.environment["FNSCRIBE_RESTORE_CLIPBOARD"] ?? "1") != "0"
+let clipboardRestoreDelay: TimeInterval = 0.4
 let triggerKey = TriggerKey.fromEnvironment()
 let projectRoot = URL(
     fileURLWithPath: ProcessInfo.processInfo.environment["FNSCRIBE_PROJECT_ROOT"] ?? FileManager.default.currentDirectoryPath,
@@ -396,7 +398,7 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
             )
             try store.append(entry)
             store.setStatus("idle", "Transcript completed and copied.")
-            log("Pasted transcript and copied it to clipboard.")
+            log(restoreClipboard ? "Pasted transcript and restored the previous clipboard." : "Pasted transcript and copied it to clipboard.")
             log("History: \(store.htmlFile.path)")
         } catch {
             pasteController.replacePlaceholder(with: "[transcription failed]", token: pasteToken)
@@ -408,13 +410,19 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
 
 struct PasteToken {
     let placeholder: String
+    let clipboard: ClipboardSnapshot?
 }
 
 final class PasteController {
     private let source = CGEventSource(stateID: .hidSystemState)
 
     func pastePlaceholder() -> PasteToken? {
-        let token = PasteToken(placeholder: placeholderText)
+        // Captured before the placeholder overwrites it, since that is the
+        // first of two clobbers on the way to the finished transcript.
+        let token = PasteToken(
+            placeholder: placeholderText,
+            clipboard: restoreClipboard ? ClipboardSnapshot.capture() : nil
+        )
         DispatchQueue.main.async {
             copyToClipboard(token.placeholder)
             sendPaste(source: self.source)
@@ -429,6 +437,14 @@ final class PasteController {
                 deletePreviousCharacters(token.placeholder.count, source: self.source)
             }
             sendPaste(source: self.source)
+
+            guard let clipboard = token?.clipboard else { return }
+            // The paste is a synthetic keystroke the target app handles on its
+            // own schedule, so give it time to read the pasteboard before the
+            // previous contents go back.
+            DispatchQueue.main.asyncAfter(deadline: .now() + clipboardRestoreDelay) {
+                clipboard.restore()
+            }
         }
     }
 }
@@ -705,6 +721,33 @@ func check(response: URLResponse, data: Data) throws {
 func copyToClipboard(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
+}
+
+/// Every representation of what was on the clipboard, so restoring a copied
+/// file or image gives back the original item rather than a string version.
+struct ClipboardSnapshot {
+    let items: [[NSPasteboard.PasteboardType: Data]]
+
+    static func capture() -> ClipboardSnapshot {
+        let items = (NSPasteboard.general.pasteboardItems ?? []).map { item in
+            item.types.reduce(into: [NSPasteboard.PasteboardType: Data]()) { result, type in
+                result[type] = item.data(forType: type)
+            }
+        }
+        return ClipboardSnapshot(items: items)
+    }
+
+    func restore() {
+        NSPasteboard.general.clearContents()
+        guard !items.isEmpty else { return }
+        NSPasteboard.general.writeObjects(items.map { entry in
+            let item = NSPasteboardItem()
+            for (type, data) in entry {
+                item.setData(data, forType: type)
+            }
+            return item
+        })
+    }
 }
 
 func sendPaste(source: CGEventSource?) {

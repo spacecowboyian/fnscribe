@@ -7,7 +7,7 @@ FnScribe is a small macOS dictation helper and Wispr Flow alternative:
 - Transcribes with OpenAI speech-to-text.
 - Optionally cleans up the transcript with a text model.
 - Pastes a `transcribing...` placeholder immediately, then replaces it with the final text.
-- Copies the finished transcript to the clipboard.
+- Restores whatever was on your clipboard before the transcript was pasted.
 - Keeps local transcript history.
 - Provides a tiny menu bar app for copying recent transcripts.
 
@@ -265,6 +265,7 @@ FNSCRIBE_COMPLETE_SOUND="Glass"
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-mini-transcribe"
 OPENAI_CLEANUP_MODEL="gpt-5-mini"
 FNSCRIBE_CLEANUP_MODE="auto"
+FNSCRIBE_RESTORE_CLIPBOARD="1"
 ```
 
 `FNSCRIBE_CLEANUP_MODE` controls when FnScribe uses the cleanup model:
@@ -274,6 +275,16 @@ FNSCRIBE_CLEANUP_MODE="auto"
 - `never`: never run the cleanup model.
 
 Set `OPENAI_CLEANUP_MODEL=""` to disable cleanup completely and make completion faster.
+
+`FNSCRIBE_RESTORE_CLIPBOARD` controls what is left on the clipboard after an
+automatic paste:
+
+- `1` (default): put back whatever was on the clipboard before dictation. This
+  keeps a copied path, image, or file usable after dictating around it.
+- `0`: leave the finished transcript on the clipboard.
+
+Either way the transcript stays in local history, and the menu bar app can copy
+any recent transcript on demand.
 
 Set `FNSCRIBE_SOUND="0"` to disable sound cues.
 
