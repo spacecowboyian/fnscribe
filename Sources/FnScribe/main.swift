@@ -23,6 +23,7 @@ let projectRoot = URL(
 )
 let logFile = projectRoot.appendingPathComponent("work/fn-scribe.log")
 var activeSounds: [NSSound] = []
+var keyboardTap: CFMachPort?
 
 struct TranscriptEntry: Codable {
     let id: String
@@ -48,6 +49,10 @@ struct AppStatus: Codable {
 }
 
 final class Store {
+    /// Status updates are triggered from the keyboard event tap callback.
+    /// Writing JSON and re-rendering the history HTML there can exceed the
+    /// tap's time budget, and macOS responds by disabling the tap outright.
+    private let ioQueue = DispatchQueue(label: "fnscribe.store.io")
     let baseDir: URL
     let audioDir: URL
     let historyFile: URL
@@ -92,11 +97,13 @@ final class Store {
     }
 
     func append(_ entry: TranscriptEntry) throws {
-        var entries = load()
-        entries.insert(entry, at: 0)
-        entries = trim(entries)
-        try writeHistory(entries)
-        try renderHTML(entries, status: loadStatus())
+        try ioQueue.sync {
+            var entries = load()
+            entries.insert(entry, at: 0)
+            entries = trim(entries)
+            try writeHistory(entries)
+            try renderHTML(entries, status: loadStatus())
+        }
     }
 
     func loadStatus() -> AppStatus {
@@ -113,12 +120,14 @@ final class Store {
             message: message,
             updatedAt: ISO8601DateFormatter.display.string(from: Date())
         )
-        do {
-            try JSONEncoder.pretty.encode(status).write(to: statusFile, options: .atomic)
-            try JSONEncoder.pretty.encode(status).write(to: publicStatusFile, options: .atomic)
-            try renderHTML(load(), status: status)
-        } catch {
-            log("Could not update UI status: \(error.localizedDescription)")
+        ioQueue.async { [self] in
+            do {
+                try JSONEncoder.pretty.encode(status).write(to: statusFile, options: .atomic)
+                try JSONEncoder.pretty.encode(status).write(to: publicStatusFile, options: .atomic)
+                try renderHTML(load(), status: status)
+            } catch {
+                log("Could not update UI status: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -353,11 +362,23 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
     }
 
     func stop() {
-        guard let recorder, recorder.isRecording else { return }
+        guard let recorder else { return }
+        let wasRecording = recorder.isRecording
         recorder.stop()
         let url = recorder.url
         let duration = Date().timeIntervalSince(startedAt)
         self.recorder = nil
+
+        guard wasRecording else {
+            // An input device change or an audio interruption stops the
+            // recorder underneath us. Returning silently here used to leave
+            // the status stuck on "recording" forever and every later key
+            // press a no-op, so clear the state instead.
+            log("Recording had already stopped on its own; resetting to idle. Partial audio: \(url.path)")
+            store.setStatus("idle", "Ready")
+            return
+        }
+
         playCue(stopSoundName)
         store.setStatus("transcribing", "Transcribing \(String(format: "%.1f", duration)) seconds of audio.")
         log("Recording stopped. Transcribing...")
@@ -370,6 +391,17 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
             withExtendedLifetime(recorder) {}
             await finish(url: url, duration: duration, pasteToken: pasteToken)
         }
+    }
+
+    func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        guard !flag else { return }
+        log("The recorder reported an unsuccessful finish.")
+    }
+
+    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        log("Recording encode error: \(error?.localizedDescription ?? "unknown"). Resetting to idle.")
+        self.recorder = nil
+        store.setStatus("idle", "Ready")
     }
 
     private static func waitForPlayableFile(at url: URL, timeout: TimeInterval = 5) async {
@@ -598,6 +630,12 @@ final class KeyWatcher {
     }
 
     func handle(_ event: CGEvent) {
+        // A recorder that stopped on its own leaves long mode latched on,
+        // which makes every later press do nothing at all.
+        if longMode && !recorder.isRecording {
+            longMode = false
+        }
+
         let isTrigger = trigger.isActive(event: event)
         if isTrigger && !triggerDown {
             triggerDown = true
@@ -829,7 +867,18 @@ func installKeyboardTap(watcher: KeyWatcher) {
         place: .headInsertEventTap,
         options: .listenOnly,
         eventsOfInterest: CGEventMask(mask),
-        callback: { _, _, event, refcon in
+        callback: { _, type, event, refcon in
+            // macOS disables a tap whose callback runs long, and never
+            // re-enables it. Without this the recorder keeps running while
+            // silently ignoring every key press.
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                let reason = type == .tapDisabledByTimeout ? "timeout" : "user input"
+                log("Keyboard event tap disabled by \(reason); re-enabling.")
+                if let keyboardTap {
+                    CGEvent.tapEnable(tap: keyboardTap, enable: true)
+                }
+                return nil
+            }
             let watcher = Unmanaged<KeyWatcher>.fromOpaque(refcon!).takeUnretainedValue()
             watcher.handle(event)
             return Unmanaged.passUnretained(event)
@@ -840,6 +889,7 @@ func installKeyboardTap(watcher: KeyWatcher) {
         exit(1)
     }
 
+    keyboardTap = tap
     let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
     CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
     CGEvent.tapEnable(tap: tap, enable: true)
