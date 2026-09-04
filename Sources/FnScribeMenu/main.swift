@@ -59,30 +59,18 @@ final class MenuApp: NSObject, NSApplicationDelegate {
             empty.isEnabled = false
             menu.addItem(empty)
         } else {
+            // One click on a transcript copies it. The full text lives in the
+            // tooltip and on the history page, so the menu stays short.
             for (index, entry) in entries.enumerated() {
-                let parent = NSMenuItem(title: "\(index + 1). \(summary(entry.cleanedText))", action: nil, keyEquivalent: "")
-                let submenu = NSMenu()
-
-                let preview = NSMenuItem(title: entry.cleanedText, action: nil, keyEquivalent: "")
-                preview.isEnabled = false
-                submenu.addItem(preview)
-
-                let copy = NSMenuItem(title: "Copy Transcript", action: #selector(copyTranscript(_:)), keyEquivalent: "")
-                copy.target = self
-                copy.representedObject = entry.cleanedText
-                submenu.addItem(copy)
-
-                let copyRaw = NSMenuItem(title: "Copy Raw Transcript", action: #selector(copyTranscript(_:)), keyEquivalent: "")
-                copyRaw.target = self
-                copyRaw.representedObject = entry.rawText
-                submenu.addItem(copyRaw)
-
-                let meta = NSMenuItem(title: "\(entry.createdAt) • \(String(format: "%.1fs", entry.durationSeconds))", action: nil, keyEquivalent: "")
-                meta.isEnabled = false
-                submenu.addItem(meta)
-
-                parent.submenu = submenu
-                menu.addItem(parent)
+                let item = NSMenuItem(
+                    title: summary(entry.cleanedText),
+                    action: #selector(copyTranscript(_:)),
+                    keyEquivalent: index < 9 ? "\(index + 1)" : ""
+                )
+                item.target = self
+                item.representedObject = entry.cleanedText
+                item.toolTip = entry.cleanedText
+                menu.addItem(item)
             }
         }
 
@@ -110,7 +98,6 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let state = status?.state ?? "idle"
         button.title = ""
         button.image = badgeImage(for: state)
-        button.image?.isTemplate = false
     }
 
     private func badgeImage(for state: String) -> NSImage {
@@ -123,7 +110,8 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let foreground: NSColor
 
         // Idle draws as a template image so macOS tints it for the current menu
-        // bar appearance; a hardcoded color is invisible in one of the two modes.
+        // bar, which follows the wallpaper rather than the light/dark setting.
+        // A hardcoded color disappears against half the backgrounds.
         let isIdle = state != "recording" && state != "transcribing"
         switch state {
         case "recording":
@@ -193,8 +181,9 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let oneLine = text
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\t", with: " ")
-        if oneLine.count <= 58 { return oneLine }
-        return String(oneLine.prefix(55)) + "..."
+        let trimmed = oneLine.trimmingCharacters(in: .whitespaces)
+        if trimmed.count <= 45 { return trimmed }
+        return String(trimmed.prefix(44)) + "\u{2026}"
     }
 
     @objc private func copyTranscript(_ sender: NSMenuItem) {
