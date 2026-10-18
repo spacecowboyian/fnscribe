@@ -31,6 +31,20 @@ final class VoiceSnippetsTests: XCTestCase {
         XCTAssertEqual(config.expand("🙂 insert (note)!"), "🙂 \(replacement)!")
     }
 
+    func testLongestActualMatchIgnoresTriggerWhitespacePadding() {
+        let config = VoiceSnippetConfiguration(snippets: [
+            .init(trigger: "insert          note", text: "SHORT"),
+            .init(trigger: "insert note here", text: "LONG")
+        ])
+        XCTAssertEqual(config.expand("insert note here"), "LONG")
+        XCTAssertEqual(config.expand("insert \t note here"), "LONG")
+        let overlapping = VoiceSnippetConfiguration(snippets: [
+            .init(trigger: "start a", text: "first"),
+            .init(trigger: "a a", text: "second")
+        ])
+        XCTAssertEqual(overlapping.expand("start a a a"), "first second")
+    }
+
     func testDisabledAndNoMatch() {
         var config = VoiceSnippetConfiguration(snippets: [.init(trigger: "hello", text: "bye", enabled: false)])
         XCTAssertEqual(config.expand("Hello"), "Hello")

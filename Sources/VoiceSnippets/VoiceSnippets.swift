@@ -42,34 +42,32 @@ public struct VoiceSnippetConfiguration: Codable, Equatable, Sendable {
 
     public func expand(_ text: String) -> String {
         guard enabled else { return text }
-        let ordered = snippets.enumerated().filter { $0.element.enabled }.sorted {
-            if $0.element.trigger.count != $1.element.trigger.count {
-                return $0.element.trigger.count > $1.element.trigger.count
-            }
-            return $0.offset < $1.offset
-        }
-        guard !ordered.isEmpty else { return text }
-        // One pass over the original text: inserted snippets are never expanded again.
-        let patterns = ordered.map { item in
-            item.element.trigger.split(whereSeparator: { $0.isWhitespace })
+        let source = text as NSString
+        var candidates: [(range: NSRange, index: Int, text: String)] = []
+        for (index, snippet) in snippets.enumerated() where snippet.enabled {
+            let pattern = snippet.trigger.split(whereSeparator: { $0.isWhitespace })
                 .map { NSRegularExpression.escapedPattern(for: String($0)) }
                 .joined(separator: "\\s+")
+            // Look ahead to include overlapping candidates; choose actual longest matches below.
+            guard let regex = try? NSRegularExpression(
+                pattern: "(?=(?<![\\p{L}\\p{M}\\p{N}_])(\(pattern))(?![\\p{L}\\p{M}\\p{N}_]))",
+                options: .caseInsensitive
+            ) else { continue }
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+                candidates.append((match.range(at: 1), index, snippet.text))
+            }
         }
-        let alternatives = patterns.map { "(\($0))" }.joined(separator: "|")
-        guard let regex = try? NSRegularExpression(
-            pattern: "(?<![\\p{L}\\p{M}\\p{N}_])(?:\(alternatives))(?![\\p{L}\\p{M}\\p{N}_])",
-            options: .caseInsensitive
-        ) else { return text }
-        let source = text as NSString
-        let matches = regex.matches(in: text, range: NSRange(location: 0, length: source.length))
+        candidates.sort {
+            if $0.range.location != $1.range.location { return $0.range.location < $1.range.location }
+            if $0.range.length != $1.range.length { return $0.range.length > $1.range.length }
+            return $0.index < $1.index
+        }
         var result = ""
         var cursor = 0
-        for match in matches {
+        // Only match original text: inserted snippets are never expanded again.
+        for match in candidates where match.range.location >= cursor {
             result += source.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-            for (index, item) in ordered.enumerated() where match.range(at: index + 1).location != NSNotFound {
-                result += item.element.text
-                break
-            }
+            result += match.text
             cursor = NSMaxRange(match.range)
         }
         result += source.substring(from: cursor)
