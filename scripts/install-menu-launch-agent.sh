@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -f "$ROOT/.env" ]]; then
+  source "$ROOT/.env"
+fi
 APP_DIR="${FNSCRIBE_MENU_APP_DIR:-$HOME/Applications}"
 APP="$APP_DIR/FnScribeMenu.app"
 PLIST="$HOME/Library/LaunchAgents/local.fnscribe.menu.plist"
@@ -26,6 +29,8 @@ cat > "$PLIST" <<PLIST
   <dict>
     <key>FNSCRIBE_PROJECT_ROOT</key>
     <string>$ROOT</string>
+    <key>FNSCRIBE_HOME</key>
+    <string>${FNSCRIBE_HOME:-$ROOT/work/fn-scribe-store}</string>
     <key>FNSCRIBE_UI_PORT</key>
     <string>${FNSCRIBE_UI_PORT:-8765}</string>
   </dict>

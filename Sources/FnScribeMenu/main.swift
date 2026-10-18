@@ -1,5 +1,8 @@
 import AppKit
 import Foundation
+#if SWIFT_PACKAGE
+import VoiceSnippets
+#endif
 
 struct TranscriptEntry: Codable {
     let id: String
@@ -30,9 +33,11 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     }
     private let statusDateFormatter = ISO8601DateFormatter()
     private var timer: Timer?
+    private var settingsController: VoiceSnippetsSettingsController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        installEditingMenu()
         if let button = statusItem.button {
             button.toolTip = "FnScribe recent transcripts"
             button.imagePosition = .imageOnly
@@ -41,6 +46,25 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.rebuildMenu()
         }
+    }
+
+    private func installEditingMenu() {
+        let mainMenu = NSMenu()
+        let appItem = NSMenuItem(title: "FnScribe", action: nil, keyEquivalent: "")
+        let appMenu = NSMenu(title: "FnScribe")
+        appMenu.addItem(withTitle: "Quit FnScribe Menu", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
     }
 
     private func rebuildMenu() {
@@ -95,6 +119,10 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let openHistory = NSMenuItem(title: "Open History Page", action: #selector(openHistoryPage), keyEquivalent: "")
         openHistory.target = self
         menu.addItem(openHistory)
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -206,6 +234,15 @@ final class MenuApp: NSObject, NSApplicationDelegate {
 
     @objc private func openHistoryPage() {
         NSWorkspace.shared.open(historyPageURL)
+    }
+
+    @objc private func openSettings() {
+        if settingsController == nil {
+            let url = VoiceSnippetStore.configurationURL(projectRoot: projectRoot)
+            settingsController = VoiceSnippetsSettingsController(store: VoiceSnippetStore(url: url))
+        }
+        settingsController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func quit() {

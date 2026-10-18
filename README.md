@@ -69,6 +69,63 @@ scripts/uninstall-launch-agents.sh
 
 After installing or running the menu app, look for **Fn** in the macOS menu bar. It shows the latest five transcripts and lets you copy cleaned or raw text.
 
+### Voice Snippets
+
+Open **Fn → Settings…** to add, edit, delete, or enable/disable voice snippets.
+Each row contains a spoken trigger and a plain-text, multiline replacement.
+**Save** persists all changes; **Reload** discards unsaved edits and reads external
+changes. You can also disable all snippets without deleting them.
+
+Settings and dictation share **`$FNSCRIBE_HOME/voice-snippets.json`**, defaulting to
+`work/fn-scribe-store/voice-snippets.json` under the project root. Settings displays
+the full path and offers **Reveal Config File**. The file is created on first
+Save. Use the same `FNSCRIBE_HOME` for the recorder and menu app; when installing
+launch agents, set it in `.env` before installing the menu app. Reinstall the menu
+agent if that path changes (the recorder reads `.env` when it starts).
+
+Coding agents can create or edit this UTF-8 JSON file directly:
+
+```json
+{
+  "enabled": true,
+  "snippets": [
+    {
+      "trigger": "insert my signature",
+      "text": "Best regards,\nAlex\n  Engineering",
+      "enabled": true
+    }
+  ]
+}
+```
+
+All fields shown are required. JSON represents line breaks as `\n` and tabs as
+`\t`; the editor accepts actual line breaks. Replacement whitespace, indentation,
+and literal characters are preserved. Empty replacement text is allowed.
+Triggers must be nonempty, single-line phrases with no outer whitespace.
+Duplicates are rejected regardless of case, internal whitespace, or enabled state.
+Keep this local file private if snippets contain sensitive information.
+
+Expansion happens **after optional transcript cleanup and before pasting**, and the
+expanded text is also saved as the finished transcript in history. Matching ignores
+case and accepts whitespace between phrase words. Triggers must not touch letters,
+combining marks, numbers, or underscores; surrounding punctuation is retained.
+Scanning proceeds left to right, choosing the **longest trigger at each position**
+(configuration order breaks equal-length ties). Replacements are literal and are
+never recursively expanded. Disabled snippets and unmatched text leave dictation
+unchanged.
+
+The recorder rereads the file before every expansion, so external edits require
+no restart. Use **Reload** to see them in an already-open Settings window.
+Malformed JSON, wrong field types, invalid triggers, and duplicates produce errors
+in Settings and the recorder log/status without overwriting the file or interrupting
+dictation. The recorder retains its last valid configuration (or no snippets if
+none has loaded yet). Fix the file and reload; Settings keeps unsaved drafts on
+validation errors and rejects saves when the file has changed externally.
+Deleting the file resets snippets to an empty configuration.
+
+The shared configuration/matching tests run with `swift test` (including on Linux).
+The recorder, menu app, and end-to-end paste flow require macOS.
+
 ## Cost Compared With Wispr Flow
 
 Wispr Flow Pro is listed at about `$15/user/month` monthly, or about `$12/user/month` when billed annually. FnScribe uses your own OpenAI API key instead of a subscription.
