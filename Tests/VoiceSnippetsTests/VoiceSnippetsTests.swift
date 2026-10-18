@@ -88,4 +88,43 @@ final class VoiceSnippetsTests: XCTestCase {
         XCTAssertEqual(VoiceSnippetStore.configurationURL(projectRoot: root, environment: [:]).path, "/project/work/fn-scribe-store/voice-snippets.json")
         XCTAssertEqual(VoiceSnippetStore.configurationURL(projectRoot: root, environment: ["FNSCRIBE_HOME": "/custom"]).path, "/custom/voice-snippets.json")
     }
+
+    func testEditDisableDeleteAndInvalidSavePreservesFile() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = VoiceSnippetStore(url: directory.appendingPathComponent("voice-snippets.json"))
+        var config = VoiceSnippetConfiguration(snippets: [.init(trigger: "hello", text: "first")])
+        var snapshot = try store.save(config, replacing: store.load())
+        config.snippets[0].text = "second\n  line"
+        config.snippets[0].enabled = false
+        snapshot = try store.save(config, replacing: snapshot)
+        XCTAssertEqual(try store.load().configuration, config)
+        var duplicate = config
+        duplicate.snippets.append(.init(trigger: "HELLO", text: "duplicate"))
+        XCTAssertThrowsError(try store.save(duplicate, replacing: snapshot))
+        XCTAssertEqual(try Data(contentsOf: store.url), snapshot.data)
+        config.enabled = false
+        config.snippets = []
+        _ = try store.save(config, replacing: snapshot)
+        XCTAssertEqual(try store.load().configuration, config)
+    }
+
+    func testMalformedFieldFeedbackAndRecovery() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("voice-snippets.json")
+        let store = VoiceSnippetStore(url: url)
+        try #"{"enabled":true,"snippets":[{"trigger":"hello","enabled":true}]}"#
+            .write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try store.load()) {
+            XCTAssertTrue($0.localizedDescription.contains("text"))
+            XCTAssertTrue($0.localizedDescription.contains("snippets"))
+        }
+        XCTAssertEqual(store.expandUsingLastValidConfiguration("hello"), "hello")
+        try #"{"enabled":true,"snippets":[{"trigger":"hello","text":"fixed","enabled":true}]}"#
+            .write(to: url, atomically: true, encoding: .utf8)
+        _ = try store.load()
+        XCTAssertEqual(store.expandUsingLastValidConfiguration("hello"), "fixed")
+    }
 }

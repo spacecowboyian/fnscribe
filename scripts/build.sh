@@ -14,6 +14,7 @@ env CLANG_MODULE_CACHE_PATH="$ROOT/work/module-cache" \
   -framework AVFoundation \
   -framework CoreGraphics \
   Sources/FnScribe/main.swift \
+  Sources/VoiceSnippets/VoiceSnippets.swift \
   -o work/bin/fn-scribe
 
 echo "Building FnScribe menu app..."
@@ -24,6 +25,8 @@ env CLANG_MODULE_CACHE_PATH="$ROOT/work/module-cache" \
   -module-cache-path "$ROOT/work/module-cache" \
   -framework AppKit \
   Sources/FnScribeMenu/main.swift \
+  Sources/FnScribeMenu/VoiceSnippetsSettings.swift \
+  Sources/VoiceSnippets/VoiceSnippets.swift \
   -o public/FnScribeMenu.app/Contents/MacOS/FnScribeMenu
 
 chmod +x work/bin/fn-scribe public/FnScribeMenu.app/Contents/MacOS/FnScribeMenu

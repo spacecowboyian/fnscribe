@@ -2,6 +2,9 @@ import AppKit
 import AVFoundation
 import CoreGraphics
 import Foundation
+#if SWIFT_PACKAGE
+import VoiceSnippets
+#endif
 
 let appName = "FnScribe"
 let holdDelay: TimeInterval = 0.18
@@ -315,11 +318,18 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
     private let store: Store
     private let transcriber: Transcriber
     private let pasteController: PasteController
+    private let voiceSnippets: VoiceSnippetStore
 
     init(store: Store, transcriber: Transcriber) {
         self.store = store
         self.transcriber = transcriber
         self.pasteController = PasteController()
+        self.voiceSnippets = VoiceSnippetStore(url: store.baseDir.appendingPathComponent("voice-snippets.json"))
+        do {
+            _ = try voiceSnippets.load()
+        } catch {
+            log(error.localizedDescription)
+        }
     }
 
     var isRecording: Bool { recorder?.isRecording == true }
@@ -369,7 +379,15 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
             let raw = try await transcriber.transcribe(url)
             store.setStatus("transcribing", "Assessing transcript cleanup.")
             let cleaned = try await transcriber.cleanIfNeeded(raw)
-            pasteController.replacePlaceholder(with: cleaned, token: pasteToken)
+            var snippetWarning = false
+            do {
+                _ = try voiceSnippets.load()
+            } catch {
+                snippetWarning = true
+                log(error.localizedDescription)
+            }
+            let expanded = voiceSnippets.expandUsingLastValidConfiguration(cleaned)
+            pasteController.replacePlaceholder(with: expanded, token: pasteToken)
             playCue(completeSoundName)
             let entry = TranscriptEntry(
                 id: UUID().uuidString,
@@ -377,10 +395,12 @@ final class Recorder: NSObject, AVAudioRecorderDelegate {
                 durationSeconds: duration,
                 audioPath: url.path,
                 rawText: raw,
-                cleanedText: cleaned
+                cleanedText: expanded
             )
             try store.append(entry)
-            store.setStatus("idle", "Transcript completed and copied.")
+            store.setStatus("idle", snippetWarning
+                ? "Transcript completed using last valid snippets. Fix voice-snippets.json in Settings; see log for details."
+                : "Transcript completed and copied.")
             log("Pasted transcript and copied it to clipboard.")
             log("History: \(store.htmlFile.path)")
         } catch {

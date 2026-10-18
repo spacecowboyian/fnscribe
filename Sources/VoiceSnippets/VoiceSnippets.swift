@@ -128,8 +128,28 @@ public final class VoiceSnippetStore: @unchecked Sendable {
             cached = configuration
             return VoiceSnippetSnapshot(configuration: configuration, data: data)
         } catch {
-            throw VoiceSnippetError("Could not load \(url.path): \(error.localizedDescription) The file was not changed. Fix it and reload; dictation keeps the last valid snippets.")
+            throw VoiceSnippetError("Could not load \(url.path): \(Self.describe(error)) The file was not changed. Fix it and reload; dictation keeps the last valid snippets.")
         }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        let context: DecodingError.Context
+        let message: String
+        switch error {
+        case DecodingError.keyNotFound(let key, let details):
+            context = details
+            message = "Missing required field “\(key.stringValue)”."
+        case DecodingError.typeMismatch(_, let details), DecodingError.valueNotFound(_, let details):
+            context = details
+            message = "Invalid field value. \(details.debugDescription)"
+        case DecodingError.dataCorrupted(let details):
+            context = details
+            message = "Invalid JSON. \(details.debugDescription)"
+        default:
+            return error.localizedDescription
+        }
+        let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+        return path.isEmpty ? message : "\(path): \(message)"
     }
 
     public func expandUsingLastValidConfiguration(_ text: String) -> String {

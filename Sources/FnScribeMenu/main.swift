@@ -1,5 +1,8 @@
 import AppKit
 import Foundation
+#if SWIFT_PACKAGE
+import VoiceSnippets
+#endif
 
 struct TranscriptEntry: Codable {
     let id: String
@@ -30,6 +33,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
     }
     private let statusDateFormatter = ISO8601DateFormatter()
     private var timer: Timer?
+    private var settingsController: VoiceSnippetsSettingsController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -95,6 +99,10 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         let openHistory = NSMenuItem(title: "Open History Page", action: #selector(openHistoryPage), keyEquivalent: "")
         openHistory.target = self
         menu.addItem(openHistory)
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -206,6 +214,15 @@ final class MenuApp: NSObject, NSApplicationDelegate {
 
     @objc private func openHistoryPage() {
         NSWorkspace.shared.open(historyPageURL)
+    }
+
+    @objc private func openSettings() {
+        if settingsController == nil {
+            let url = VoiceSnippetStore.configurationURL(projectRoot: projectRoot)
+            settingsController = VoiceSnippetsSettingsController(store: VoiceSnippetStore(url: url))
+        }
+        settingsController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func quit() {
