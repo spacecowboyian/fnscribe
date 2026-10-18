@@ -37,6 +37,7 @@ final class MenuApp: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        installEditingMenu()
         if let button = statusItem.button {
             button.toolTip = "FnScribe recent transcripts"
             button.imagePosition = .imageOnly
@@ -45,6 +46,25 @@ final class MenuApp: NSObject, NSApplicationDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.rebuildMenu()
         }
+    }
+
+    private func installEditingMenu() {
+        let mainMenu = NSMenu()
+        let appItem = NSMenuItem(title: "FnScribe", action: nil, keyEquivalent: "")
+        let appMenu = NSMenu(title: "FnScribe")
+        appMenu.addItem(withTitle: "Quit FnScribe Menu", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
     }
 
     private func rebuildMenu() {
